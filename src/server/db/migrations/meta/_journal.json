@@ -8,6 +8,13 @@
       "when": 1778779455107,
       "tag": "0000_curvy_shockwave",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1778781424590,
+      "tag": "0001_soft_tigra",
+      "breakpoints": true
     }
   ]
 }
