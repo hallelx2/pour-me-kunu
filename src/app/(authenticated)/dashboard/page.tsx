@@ -161,9 +161,17 @@ export default async function DashboardPage() {
         </section>
       ) : (
         <section className="mt-10">
-          <h2 className="font-display text-2xl font-semibold text-kunu-ink">
-            Recent tips
-          </h2>
+          <div className="flex items-baseline justify-between">
+            <h2 className="font-display text-2xl font-semibold text-kunu-ink">
+              Recent tips
+            </h2>
+            <Link
+              href="/dashboard/supporters"
+              className="text-sm font-semibold text-kunu-terracotta hover:underline"
+            >
+              View all →
+            </Link>
+          </div>
           <ul className="mt-4 space-y-2">
             {recentTips.map((tip) => (
               <li
