@@ -3,20 +3,22 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X } from "lucide-react";
+import { Menu, X, LayoutDashboard } from "lucide-react";
 import { KunuCupGlyph } from "./KunuCupGlyph";
+import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
-  { label: "How it works", href: "#how-it-works" },
-  { label: "Pricing", href: "#pricing" },
-  { label: "Examples", href: "#demo-creators" },
-  { label: "FAQ", href: "#faq" },
+  { label: "How it works", href: "/#how-it-works" },
+  { label: "Pricing", href: "/#pricing" },
+  { label: "Examples", href: "/#demo-creators" },
+  { label: "FAQ", href: "/#faq" },
 ];
 
 export function Nav() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const { data: session, isPending } = useSession();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 16);
@@ -24,6 +26,8 @@ export function Nav() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  const signedIn = !!session?.user;
 
   return (
     <header
@@ -38,7 +42,6 @@ export function Nav() {
         aria-label="Primary"
         className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3.5 sm:px-8 lg:px-12"
       >
-        {/* Brand */}
         <Link
           href="/"
           className="group flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-kunu-ink"
@@ -49,7 +52,6 @@ export function Nav() {
           </span>
         </Link>
 
-        {/* Center links (desktop) */}
         <ul className="hidden items-center gap-1 md:flex">
           {NAV_LINKS.map((link) => (
             <li key={link.href}>
@@ -65,21 +67,44 @@ export function Nav() {
 
         {/* Right CTAs (desktop) */}
         <div className="hidden items-center gap-2 md:flex">
-          <Link
-            href="/signin"
-            className="rounded-full px-3.5 py-1.5 text-sm font-medium text-kunu-ink-soft transition-colors hover:text-kunu-ink"
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/signup"
-            className="rounded-full bg-kunu-ink px-4 py-2 text-sm font-semibold text-kunu-cream transition-all hover:bg-kunu-terracotta-deep"
-          >
-            Get started
-          </Link>
+          {isPending ? (
+            <div className="h-9 w-32 animate-pulse rounded-full bg-kunu-cream-deep/50" />
+          ) : signedIn ? (
+            <>
+              {session.user.username && (
+                <Link
+                  href={`/@${session.user.username}`}
+                  className="rounded-full px-3.5 py-1.5 text-sm font-medium text-kunu-ink-soft transition-colors hover:text-kunu-ink"
+                >
+                  My page
+                </Link>
+              )}
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center gap-1.5 rounded-full bg-kunu-ink px-4 py-2 text-sm font-semibold text-kunu-cream transition-all hover:bg-kunu-terracotta-deep"
+              >
+                <LayoutDashboard className="h-4 w-4" />
+                Dashboard
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/signin"
+                className="rounded-full px-3.5 py-1.5 text-sm font-medium text-kunu-ink-soft transition-colors hover:text-kunu-ink"
+              >
+                Sign in
+              </Link>
+              <Link
+                href="/signup"
+                className="rounded-full bg-kunu-ink px-4 py-2 text-sm font-semibold text-kunu-cream transition-all hover:bg-kunu-terracotta-deep"
+              >
+                Get started
+              </Link>
+            </>
+          )}
         </div>
 
-        {/* Mobile menu button */}
         <button
           type="button"
           aria-label={open ? "Close menu" : "Open menu"}
@@ -91,7 +116,6 @@ export function Nav() {
         </button>
       </nav>
 
-      {/* Mobile menu */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -113,18 +137,39 @@ export function Nav() {
                 </a>
               ))}
               <div className="mt-3 grid grid-cols-2 gap-2 pt-3">
-                <Link
-                  href="/signin"
-                  className="rounded-full border border-kunu-ink/10 bg-kunu-cream-deep/50 px-4 py-2.5 text-center text-sm font-semibold text-kunu-ink"
-                >
-                  Sign in
-                </Link>
-                <Link
-                  href="/signup"
-                  className="rounded-full bg-kunu-ink px-4 py-2.5 text-center text-sm font-semibold text-kunu-cream"
-                >
-                  Get started
-                </Link>
+                {signedIn ? (
+                  <>
+                    {session.user.username && (
+                      <Link
+                        href={`/@${session.user.username}`}
+                        className="rounded-full border border-kunu-ink/10 bg-kunu-cream-deep/50 px-4 py-2.5 text-center text-sm font-semibold text-kunu-ink"
+                      >
+                        My page
+                      </Link>
+                    )}
+                    <Link
+                      href="/dashboard"
+                      className="rounded-full bg-kunu-ink px-4 py-2.5 text-center text-sm font-semibold text-kunu-cream"
+                    >
+                      Dashboard
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href="/signin"
+                      className="rounded-full border border-kunu-ink/10 bg-kunu-cream-deep/50 px-4 py-2.5 text-center text-sm font-semibold text-kunu-ink"
+                    >
+                      Sign in
+                    </Link>
+                    <Link
+                      href="/signup"
+                      className="rounded-full bg-kunu-ink px-4 py-2.5 text-center text-sm font-semibold text-kunu-cream"
+                    >
+                      Get started
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </motion.div>
