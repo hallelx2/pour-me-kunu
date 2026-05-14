@@ -1,13 +1,14 @@
 import { notFound } from "next/navigation";
-import { eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import { Heart } from "lucide-react";
 import { db } from "@/server/db";
 import { users } from "@/server/db/schema/users";
 import { creatorProfiles } from "@/server/db/schema/creators";
+import { tips } from "@/server/db/schema/tips";
 import { CreatorTipWidget } from "@/components/creator/CreatorTipWidget";
 import { Nav } from "@/components/landing/Nav";
-import { cn } from "@/lib/utils";
+import { cn, formatNaira } from "@/lib/utils";
 
 const ACCENT_TO_GRADIENT: Record<string, string> = {
   terracotta: "from-kunu-terracotta/60 via-kunu-ochre/40 to-kunu-cream-deep",
@@ -166,17 +167,13 @@ export default async function CreatorPage({ params }: PageProps) {
                 </p>
               )}
 
-              {/* Supporters wall placeholder */}
-              <h2 className="mt-12 font-display text-xl font-semibold text-kunu-ink">
-                Supporters
-              </h2>
-              <div className="mt-3 rounded-2xl border-2 border-dashed border-kunu-ink/12 bg-kunu-cream-deep/30 p-8 text-center">
-                <Heart className="mx-auto h-6 w-6 text-kunu-terracotta" />
-                <p className="mt-2 text-sm text-kunu-ink-soft">
-                  Be the first to send {profile.displayName.split(" ")[0]} a{" "}
-                  {profile.kunuLabel}.
-                </p>
-              </div>
+              {/* Supporters wall */}
+              <SupportersWall
+                creatorUserId={user.id}
+                firstName={profile.displayName.split(" ")[0]}
+                kunuLabel={profile.kunuLabel}
+              />
+
             </section>
 
             <aside className="lg:sticky lg:top-24">
@@ -209,5 +206,83 @@ export default async function CreatorPage({ params }: PageProps) {
         </footer>
       </main>
     </>
+  );
+}
+
+async function SupportersWall({
+  creatorUserId,
+  firstName,
+  kunuLabel,
+}: {
+  creatorUserId: string;
+  firstName: string;
+  kunuLabel: string;
+}) {
+  const recent = await db
+    .select({
+      id: tips.id,
+      supporterName: tips.supporterName,
+      kunuCount: tips.kunuCount,
+      amountKobo: tips.amountKobo,
+      message: tips.message,
+      paidAt: tips.paidAt,
+    })
+    .from(tips)
+    .where(
+      and(
+        eq(tips.creatorUserId, creatorUserId),
+        eq(tips.status, "paid"),
+        eq(tips.isPublic, true),
+      ),
+    )
+    .orderBy(desc(tips.paidAt))
+    .limit(20);
+
+  return (
+    <section className="mt-12">
+      <div className="flex items-baseline justify-between">
+        <h2 className="font-display text-xl font-semibold text-kunu-ink">
+          Supporters
+        </h2>
+        {recent.length > 0 && (
+          <span className="text-xs text-kunu-clay">
+            {recent.length}+ recent
+          </span>
+        )}
+      </div>
+
+      {recent.length === 0 ? (
+        <div className="mt-3 rounded-2xl border-2 border-dashed border-kunu-ink/12 bg-kunu-cream-deep/30 p-8 text-center">
+          <Heart className="mx-auto h-6 w-6 text-kunu-terracotta" />
+          <p className="mt-2 text-sm text-kunu-ink-soft">
+            Be the first to send {firstName} a {kunuLabel}.
+          </p>
+        </div>
+      ) : (
+        <ul className="mt-4 space-y-3">
+          {recent.map((tip) => (
+            <li
+              key={tip.id}
+              className="rounded-2xl border-2 border-kunu-ink/8 bg-kunu-cream p-4"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="font-display text-sm font-semibold text-kunu-ink">
+                  {tip.supporterName?.trim() || "Anonymous"}
+                </div>
+                <div className="shrink-0 text-xs font-medium text-kunu-terracotta">
+                  {tip.kunuCount} × {kunuLabel}
+                  {tip.kunuCount > 1 ? "s" : ""} · {formatNaira(tip.amountKobo)}
+                </div>
+              </div>
+              {tip.message && (
+                <p className="mt-2 text-sm leading-relaxed text-kunu-ink-soft text-pretty">
+                  {tip.message}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
-import confetti from "canvas-confetti";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { KunuCupGlyph } from "@/components/landing/KunuCupGlyph";
+import { trpc } from "@/lib/trpc";
 import { cn, formatNaira } from "@/lib/utils";
 
 interface Creator {
@@ -25,10 +26,13 @@ export function CreatorTipWidget({ creator }: { creator: Creator }) {
   const [message, setMessage] = useState("");
   const [supporterName, setSupporterName] = useState("");
   const [supporterEmail, setSupporterEmail] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
 
   const totalKobo = count * creator.kunuPriceKobo;
   const displayValue = useMotionValue(totalKobo);
   const displayText = useTransform(displayValue, (v) => formatNaira(v));
+
+  const initiate = trpc.tips.initiate.useMutation();
 
   const setKunuCount = (n: number) => {
     const next = Math.max(1, Math.min(MAX_KUNUS, Math.round(n)));
@@ -39,35 +43,39 @@ export function CreatorTipWidget({ creator }: { creator: Creator }) {
     });
   };
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supporterEmail.trim() || !/\S+@\S+\.\S+/.test(supporterEmail)) {
       toast.error("Email is required so we can send a receipt.");
       return;
     }
-    confetti({
-      particleCount: 80,
-      spread: 70,
-      startVelocity: 35,
-      origin: { y: 0.6 },
-      colors: ["#C8512C", "#E5A347", "#2D5F3F", "#FBF5EC"],
-      scalar: 0.9,
-    });
-    toast.success(
-      `${count} ${creator.kunuLabel}${count > 1 ? "s" : ""} on the way`,
-      {
-        description:
-          "Payments unlock when Paystack is wired in the next release. This is a preview.",
-      },
-    );
+    try {
+      const result = await initiate.mutateAsync({
+        username: creator.username,
+        kunuCount: count,
+        supporterEmail,
+        supporterName,
+        message,
+        isPublic,
+      });
+      // Hand off to Paystack
+      window.location.href = result.authorization_url;
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Couldn't start the payment. Try again in a moment.",
+      );
+    }
   };
 
   const fillLevel = Math.min(1, count / 7);
   const first = creator.displayName.split(" ")[0];
+  const loading = initiate.isPending;
 
   return (
     <form
-      onSubmit={handleSend}
+      onSubmit={handleSubmit}
       className="relative rounded-3xl border-2 border-kunu-ink/10 bg-kunu-cream p-6 shadow-[0_30px_60px_-30px_rgba(31,22,17,0.4)] sm:p-7"
     >
       <div className="flex items-end gap-4">
@@ -76,8 +84,8 @@ export function CreatorTipWidget({ creator }: { creator: Creator }) {
             Buy {first} a {creator.kunuLabel}
           </div>
           <div className="mt-1 text-xs text-kunu-clay">
-            {formatNaira(creator.kunuPriceKobo)} per {creator.kunuLabel} ·
-            {" "}{first} gets a note from you
+            {formatNaira(creator.kunuPriceKobo)} per {creator.kunuLabel} ·{" "}
+            {first} gets a note from you
           </div>
         </div>
         <div className="shrink-0">
@@ -85,7 +93,6 @@ export function CreatorTipWidget({ creator }: { creator: Creator }) {
         </div>
       </div>
 
-      {/* Count selector */}
       <div className="mt-5">
         <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-kunu-clay">
           <span>How many?</span>
@@ -186,6 +193,16 @@ export function CreatorTipWidget({ creator }: { creator: Creator }) {
         className="mt-3 w-full rounded-xl border-2 border-kunu-ink/10 bg-kunu-cream-deep/30 px-4 py-3 text-sm placeholder:text-kunu-clay/70 focus:border-kunu-terracotta focus:bg-kunu-cream focus:outline-none"
       />
 
+      <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs text-kunu-clay">
+        <input
+          type="checkbox"
+          checked={isPublic}
+          onChange={(e) => setIsPublic(e.target.checked)}
+          className="h-4 w-4 rounded border-2 border-kunu-ink/20 text-kunu-terracotta focus:ring-kunu-terracotta"
+        />
+        Show my name and message on {first}'s public wall
+      </label>
+
       <div className="mt-5 flex items-center justify-between gap-3">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-kunu-clay">
@@ -197,12 +214,15 @@ export function CreatorTipWidget({ creator }: { creator: Creator }) {
         </div>
         <motion.button
           type="submit"
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
-          className="rounded-xl bg-kunu-terracotta px-5 py-3.5 font-display text-sm font-semibold text-kunu-cream shadow-[0_8px_20px_-6px_rgba(200,81,44,0.6)] hover:bg-kunu-terracotta-deep"
+          disabled={loading}
+          whileHover={loading ? undefined : { scale: 1.03 }}
+          whileTap={loading ? undefined : { scale: 0.97 }}
+          className="inline-flex items-center gap-2 rounded-xl bg-kunu-terracotta px-5 py-3.5 font-display text-sm font-semibold text-kunu-cream shadow-[0_8px_20px_-6px_rgba(200,81,44,0.6)] transition-colors hover:bg-kunu-terracotta-deep disabled:opacity-70"
         >
-          Send {count} {creator.kunuLabel}
-          {count > 1 ? "s" : ""}
+          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+          {loading
+            ? "Redirecting…"
+            : `Send ${count} ${creator.kunuLabel}${count > 1 ? "s" : ""}`}
         </motion.button>
       </div>
     </form>
