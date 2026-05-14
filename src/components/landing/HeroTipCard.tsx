@@ -1,36 +1,55 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 import confetti from "canvas-confetti";
 import { toast } from "sonner";
 import Image from "next/image";
 import { KunuCupGlyph } from "./KunuCupGlyph";
+import { HERO_ACCENT_FRAMES, type HeroCreator } from "@/lib/hero-creators";
 import { cn, formatNaira } from "@/lib/utils";
 
-const KUNU_PRICE_KOBO = 50000; // ₦500 per kunu for the demo creator
 const PRESET_COUNTS = [1, 3, 5] as const;
 const MAX_KUNUS = 99;
 
-export function HeroTipWidget() {
+const ACCENT_LABEL: Record<HeroCreator["accent"], string> = {
+  terracotta: "Terracotta",
+  ochre: "Ochre",
+  green: "Green",
+};
+
+interface HeroTipCardProps {
+  creator: HeroCreator;
+  onInteract?: () => void;
+}
+
+export function HeroTipCard({ creator, onInteract }: HeroTipCardProps) {
   const [count, setCount] = useState<number>(3);
   const [isCustom, setIsCustom] = useState(false);
-  const [message, setMessage] = useState("");
 
-  const totalKobo = count * KUNU_PRICE_KOBO;
+  const totalKobo = count * creator.kunuPriceKobo;
   const displayValue = useMotionValue(totalKobo);
   const displayText = useTransform(displayValue, (v) => formatNaira(v));
 
+  // When creator switches, reset to 3 kunus
+  useEffect(() => {
+    setCount(3);
+    setIsCustom(false);
+    animate(displayValue, 3 * creator.kunuPriceKobo, { duration: 0.4 });
+  }, [creator.kunuPriceKobo, displayValue]);
+
   const setKunuCount = (n: number) => {
+    onInteract?.();
     const next = Math.max(1, Math.min(MAX_KUNUS, Math.round(n)));
     setCount(next);
-    animate(displayValue, next * KUNU_PRICE_KOBO, {
+    animate(displayValue, next * creator.kunuPriceKobo, {
       duration: 0.45,
       ease: [0.25, 0.46, 0.45, 0.94],
     });
   };
 
   const handleSend = () => {
+    onInteract?.();
     confetti({
       particleCount: 80,
       spread: 70,
@@ -40,37 +59,42 @@ export function HeroTipWidget() {
       scalar: 0.9,
     });
     toast.success(`${count} kunu${count > 1 ? "s" : ""} on the way 🥤`, {
-      description: "This is a demo — claim your handle above to receive real kunus.",
+      description: `${creator.displayName.split(" ")[0]} would love this. Claim your handle above to receive real kunus.`,
     });
   };
 
   const fillLevel = Math.min(1, count / 7);
+  const frame = HERO_ACCENT_FRAMES[creator.accent];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 30, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.7, delay: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-      whileHover={{ y: -4 }}
-      className="relative w-full max-w-md"
-    >
-      {/* Decorative back frame for depth */}
+    <div className="relative">
+      {/* Layered decorative back frames — themed per creator */}
       <div
         aria-hidden
-        className="absolute -inset-3 -z-10 rounded-[2rem] bg-kunu-terracotta-deep/90 -rotate-2"
+        className={cn(
+          "absolute -inset-3 -z-10 rounded-[2rem] -rotate-2",
+          frame.back,
+        )}
       />
       <div
         aria-hidden
-        className="absolute -inset-1 -z-10 rounded-[1.75rem] bg-kunu-ochre rotate-1"
+        className={cn(
+          "absolute -inset-1 -z-10 rounded-[1.75rem] rotate-1",
+          frame.mid,
+        )}
       />
 
       <div className="relative rounded-[1.5rem] border-2 border-kunu-ink/10 bg-kunu-cream p-6 shadow-[0_30px_60px_-30px_rgba(31,22,17,0.4)]">
-        {/* Creator header */}
         <div className="flex items-center gap-3">
-          <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full ring-2 ring-kunu-terracotta/30 ring-offset-2 ring-offset-kunu-cream">
+          <div
+            className={cn(
+              "relative h-12 w-12 shrink-0 overflow-hidden rounded-full ring-2 ring-offset-2 ring-offset-kunu-cream",
+              frame.ring,
+            )}
+          >
             <Image
-              src="https://api.dicebear.com/9.x/lorelei/svg?seed=Ada&backgroundType=gradientLinear&backgroundColor=fbf5ec,f4d7a3"
-              alt="Ada Okonkwo avatar"
+              src={`https://api.dicebear.com/9.x/lorelei/svg?seed=${creator.avatarSeed}&backgroundType=gradientLinear&backgroundColor=fbf5ec,f4d7a3`}
+              alt={`${creator.displayName} avatar`}
               fill
               sizes="48px"
               unoptimized
@@ -78,10 +102,10 @@ export function HeroTipWidget() {
           </div>
           <div className="min-w-0">
             <div className="font-display text-base font-semibold text-kunu-ink">
-              Ada Okonkwo
+              {creator.displayName}
             </div>
             <div className="truncate text-xs text-kunu-clay">
-              Illustrator · Lagos · @ada
+              {creator.role} · {creator.city} · @{creator.handle}
             </div>
           </div>
           <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-kunu-green/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-kunu-green">
@@ -93,19 +117,15 @@ export function HeroTipWidget() {
         <div className="mt-5 flex items-end gap-4">
           <div className="flex-1">
             <div className="font-display text-2xl font-semibold leading-tight text-kunu-ink">
-              Buy Ada some kunus
+              Buy {creator.displayName.split(" ")[0]} some kunus
             </div>
             <div className="mt-1 text-xs text-kunu-clay">
-              ₦500 per kunu · she'll get a note from you
+              {formatNaira(creator.kunuPriceKobo)} per kunu ·{" "}
+              {ACCENT_LABEL[creator.accent]} vibes
             </div>
           </div>
           <div className="shrink-0">
-            <KunuCupGlyph
-              fillLevel={fillLevel}
-              size={56}
-              withStraw
-              withSparkles
-            />
+            <KunuCupGlyph fillLevel={fillLevel} size={56} withStraw withSparkles />
           </div>
         </div>
 
@@ -182,14 +202,14 @@ export function HeroTipWidget() {
           )}
         </div>
 
-        {/* Message */}
+        {/* Message preview (read-only — placeholder reflects creator) */}
         <div className="mt-4">
           <input
             type="text"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onFocus={onInteract}
+            defaultValue=""
             maxLength={140}
-            placeholder="Your art keeps me going, Ada 💛"
+            placeholder={creator.recentMessage}
             className="w-full rounded-xl border-2 border-kunu-ink/10 bg-kunu-cream-deep/30 px-4 py-3 text-sm placeholder:text-kunu-clay/70 focus:border-kunu-terracotta focus:bg-kunu-cream focus:outline-none"
           />
         </div>
@@ -211,7 +231,9 @@ export function HeroTipWidget() {
             whileTap={{ scale: 0.97 }}
             className="group/btn relative overflow-hidden rounded-xl bg-kunu-terracotta px-5 py-3.5 font-display text-sm font-semibold text-kunu-cream shadow-[0_8px_20px_-6px_rgba(200,81,44,0.6)] transition-colors hover:bg-kunu-terracotta-deep"
           >
-            <span className="relative z-10">Send {count} kunu{count > 1 ? "s" : ""}</span>
+            <span className="relative z-10">
+              Send {count} kunu{count > 1 ? "s" : ""}
+            </span>
             <span
               aria-hidden
               className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-kunu-cream/30 to-transparent transition-transform duration-700 group-hover/btn:translate-x-full"
@@ -219,6 +241,6 @@ export function HeroTipWidget() {
           </motion.button>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

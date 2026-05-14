@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
 import { BrushUnderline } from "./BrushUnderline";
 import { ClaimHandleForm } from "./ClaimHandleForm";
-import { HeroTipWidget } from "./HeroTipWidget";
+import { HeroTipCardStack } from "./HeroTipCardStack";
 import { landingCopy } from "@/lib/landing-copy";
 
 const fadeUp = {
@@ -110,9 +110,9 @@ export function Hero() {
           </motion.div>
         </motion.div>
 
-        {/* Right column — interactive widget */}
+        {/* Right column — auto-flipping stack of creator tip cards */}
         <div className="flex justify-center lg:justify-end">
-          <HeroTipWidget />
+          <HeroTipCardStack />
         </div>
       </div>
 
