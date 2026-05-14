@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { validateUsernameFormat } from "@/lib/reserved-usernames";
 
 interface ClaimHandleFormProps {
   variant?: "light" | "inverted";
@@ -12,58 +14,25 @@ interface ClaimHandleFormProps {
   className?: string;
 }
 
-const RESERVED = new Set([
-  "admin",
-  "api",
-  "dashboard",
-  "signin",
-  "signup",
-  "checkout",
-  "paystack",
-  "kunu",
-  "buymekunu",
-  "support",
-  "terms",
-  "privacy",
-  "help",
-  "settings",
-  "onboarding",
-]);
-
-function isValidUsername(raw: string): { ok: boolean; reason?: string } {
-  const u = raw.trim().toLowerCase();
-  if (u.length < 3) return { ok: false, reason: "Must be at least 3 characters." };
-  if (u.length > 30) return { ok: false, reason: "Max 30 characters." };
-  if (!/^[a-z0-9_.]+$/.test(u))
-    return {
-      ok: false,
-      reason: "Only letters, numbers, dots, and underscores.",
-    };
-  if (RESERVED.has(u)) return { ok: false, reason: "That handle is reserved." };
-  return { ok: true };
-}
-
 export function ClaimHandleForm({
   variant = "light",
   size = "md",
   className,
 }: ClaimHandleFormProps) {
+  const router = useRouter();
   const [value, setValue] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const v = isValidUsername(value);
-    if (!v.ok) {
-      toast.error(v.reason ?? "Invalid handle.");
+    const normalized = value.trim().toLowerCase();
+    const check = validateUsernameFormat(normalized);
+    if (!check.ok) {
+      toast.error(check.reason ?? "Invalid handle.");
       return;
     }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setLoading(false);
-    toast.success(`@${value.toLowerCase()} is available!`, {
-      description: "Sign up to claim it — onboarding ships soon.",
-    });
+    router.push(`/signup?username=${encodeURIComponent(normalized)}`);
   };
 
   const isInverted = variant === "inverted";
@@ -116,7 +85,7 @@ export function ClaimHandleForm({
             : "bg-kunu-terracotta text-kunu-cream hover:bg-kunu-terracotta-deep",
         )}
       >
-        {loading ? "Checking…" : "Claim my page"}
+        {loading ? "Loading…" : "Claim my page"}
         <ArrowRight className="h-4 w-4" />
       </motion.button>
     </form>
