@@ -1,26 +1,153 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* ── Brand palette ─────────────────────────────────────────── */
+  --color-kunu-cream: #fbf5ec;
+  --color-kunu-cream-deep: #f4ebd9;
+  --color-kunu-ink: #1f1611;
+  --color-kunu-ink-soft: #4a3a2e;
+
+  --color-kunu-terracotta: #c8512c;
+  --color-kunu-terracotta-deep: #8e3819;
+  --color-kunu-terracotta-soft: #e8907a;
+
+  --color-kunu-ochre: #e5a347;
+  --color-kunu-ochre-soft: #f4d7a3;
+
+  --color-kunu-green: #2d5f3f;
+  --color-kunu-green-soft: #5c8a6e;
+  --color-kunu-green-deep: #1a3a26;
+
+  --color-kunu-clay: #7a5c45;
+  --color-kunu-clay-soft: #b49680;
+
+  --color-kunu-night: #2a1810;
+
+  /* ── Fonts ─────────────────────────────────────────────────── */
+  --font-display: var(--font-fraunces), ui-serif, Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* ── Easing ────────────────────────────────────────────────── */
+  --ease-warm: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── Custom animations ─────────────────────────────────────── */
+  --animate-marquee: marquee 40s linear infinite;
+  --animate-marquee-vertical: marquee-vertical 40s linear infinite;
+  --animate-glow-pulse: glow-pulse 3s ease-in-out infinite;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100% - var(--gap, 1rem)));
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes marquee-vertical {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(calc(-100% - var(--gap, 1rem)));
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes accordion-down {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+    opacity: 1;
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background: var(--color-kunu-cream);
+    color: var(--color-kunu-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background: var(--color-kunu-terracotta);
+    color: var(--color-kunu-cream);
+  }
+
+  /* Focus visible styling */
+  *:focus-visible {
+    outline: 2px solid var(--color-kunu-terracotta);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  /* Subtle Adinkra-inspired background texture */
+  .bg-adinkra-pattern {
+    background-image: radial-gradient(circle at 1px 1px, color-mix(in oklab, var(--color-kunu-clay) 100%, transparent) 1px, transparent 0);
+    background-size: 32px 32px;
+    background-position: 0 0;
+  }
+
+  .bg-grain {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
