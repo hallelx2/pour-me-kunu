@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import { Toaster } from "sonner";
+import { TRPCProvider } from "@/components/providers/TRPCProvider";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -71,17 +72,19 @@ export default function RootLayout({
       className={`${fraunces.variable} ${inter.variable} antialiased`}
     >
       <body className="min-h-screen bg-kunu-cream text-kunu-ink">
-        {children}
-        <Toaster
-          position="bottom-center"
-          theme="light"
-          toastOptions={{
-            classNames: {
-              toast:
-                "!bg-kunu-cream !text-kunu-ink !border-kunu-clay/30 !font-sans",
-            },
-          }}
-        />
+        <TRPCProvider>
+          {children}
+          <Toaster
+            position="bottom-center"
+            theme="light"
+            toastOptions={{
+              classNames: {
+                toast:
+                  "!bg-kunu-cream !text-kunu-ink !border-kunu-clay/30 !font-sans",
+              },
+            }}
+          />
+        </TRPCProvider>
       </body>
     </html>
   );
