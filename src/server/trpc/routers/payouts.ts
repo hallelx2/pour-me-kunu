@@ -238,6 +238,25 @@ export const payoutsRouter = router({
         })
         .returning();
 
+      // Simulate mode — for demos + investor previews. When the real
+      // Paystack Transfer API can't run (Paystack accounts without business
+      // KYC return 403 here), this short-circuits to a success state with
+      // an identifiable transfer code prefix so admins can still tell
+      // simulated payouts apart in /admin/payouts.
+      if (process.env.PAYOUTS_SIMULATE === "true") {
+        const [simulated] = await ctx.db
+          .update(payouts)
+          .set({
+            paystackTransferCode: `TRF_simulated_${reference}`,
+            status: "success",
+            completedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(payouts.id, payoutRow.id))
+          .returning();
+        return simulated;
+      }
+
       try {
         const transfer = await initiateTransfer({
           amountKobo: input.amountKobo,
