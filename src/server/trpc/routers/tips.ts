@@ -91,7 +91,8 @@ export const tipsRouter = router({
           email: supporterEmail,
           amountKobo,
           reference,
-          callback_url: `${appUrl()}/checkout/callback?reference=${reference}`,
+          // Paystack appends ?reference=…&trxref=… itself; don't double-add
+          callback_url: `${appUrl()}/checkout/callback`,
           metadata: {
             tipId: tip.id,
             creatorUsername: creator.username,

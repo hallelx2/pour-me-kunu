@@ -228,7 +228,8 @@ export const membershipsRouter = router({
           amountKobo: tier.priceKobo,
           reference,
           plan: tier.paystackPlanCode,
-          callback_url: `${appUrl()}/checkout/callback?reference=${reference}`,
+          // Paystack appends ?reference=…&trxref=… itself; don't double-add
+          callback_url: `${appUrl()}/checkout/callback`,
           metadata: {
             subscriptionId: sub.id,
             tierId: tier.id,

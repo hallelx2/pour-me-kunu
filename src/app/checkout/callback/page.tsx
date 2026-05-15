@@ -18,17 +18,25 @@ const PLATFORM_FEE_RATE = 0.05;
 
 interface PageProps {
   searchParams: Promise<{
-    reference?: string;
-    ref?: string;
-    trxref?: string;
+    reference?: string | string[];
+    ref?: string | string[];
+    trxref?: string | string[];
   }>;
 }
 
 export const dynamic = "force-dynamic";
 
+function pickFirst(v: string | string[] | undefined): string | undefined {
+  if (!v) return undefined;
+  if (Array.isArray(v)) return v[0]?.trim() || undefined;
+  // Defensive: if Next ever joins duplicates with comma, split it.
+  return v.split(",")[0]?.trim() || undefined;
+}
+
 export default async function CheckoutCallbackPage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const reference = sp.reference ?? sp.ref ?? sp.trxref;
+  const reference =
+    pickFirst(sp.reference) ?? pickFirst(sp.ref) ?? pickFirst(sp.trxref);
 
   if (!reference) {
     return <ErrorState reason="No payment reference in the URL." />;
