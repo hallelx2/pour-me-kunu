@@ -7,6 +7,7 @@ import {
   subscriptions,
   subscriptionCharges,
 } from "@/server/db/schema/memberships";
+import { payouts } from "@/server/db/schema/payouts";
 import { verifyPaystackSignature } from "@/server/paystack/webhook-verify";
 
 const PLATFORM_FEE_RATE = 0.05;
@@ -42,7 +43,16 @@ export async function POST(req: Request) {
       case "subscription.not_renew":
         await handleSubscriptionNotRenew(event.data);
         break;
-      // TODO: invoice.payment_failed, transfer.success/failed/reversed (Phase 2)
+      case "transfer.success":
+        await handleTransferSuccess(event.data);
+        break;
+      case "transfer.failed":
+        await handleTransferFailedOrReversed(event.data, "failed");
+        break;
+      case "transfer.reversed":
+        await handleTransferFailedOrReversed(event.data, "reversed");
+        break;
+      // TODO: invoice.payment_failed
       default:
         break;
     }
@@ -252,4 +262,84 @@ async function handleSubscriptionNotRenew(data: Record<string, unknown>) {
     .update(subscriptions)
     .set({ status: "non-renewing", updatedAt: new Date() })
     .where(eq(subscriptions.paystackSubscriptionCode, d.subscription_code));
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * transfer.success — payout cleared. Mark the row + stamp completedAt.
+ * The amount was already debited from availableKobo at requestPayout time,
+ * so no balance change here. Only flip status if it's still 'processing'.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+interface TransferEventData {
+  transfer_code?: string;
+  reference?: string;
+  amount?: number;
+  status?: string;
+  reason?: string;
+  failures?: string;
+}
+
+async function handleTransferSuccess(data: Record<string, unknown>) {
+  const d = data as unknown as TransferEventData;
+  const code = d.transfer_code;
+  const ref = d.reference;
+  if (!code && !ref) return;
+
+  await db
+    .update(payouts)
+    .set({
+      status: "success",
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        code ? eq(payouts.paystackTransferCode, code) : eq(payouts.paystackReference, ref!),
+        // Idempotent: only flip if still 'processing' or 'requested'
+        sql`${payouts.status} in ('processing','requested')`,
+      ),
+    );
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * transfer.failed / transfer.reversed — refund the held balance back to
+ * availableKobo and mark the row. Idempotent on status.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+async function handleTransferFailedOrReversed(
+  data: Record<string, unknown>,
+  kind: "failed" | "reversed",
+) {
+  const d = data as unknown as TransferEventData;
+  const code = d.transfer_code;
+  const ref = d.reference;
+  if (!code && !ref) return;
+
+  // Compare-and-set: only refund + mark if still in an open state
+  const [updated] = await db
+    .update(payouts)
+    .set({
+      status: kind,
+      failureReason: d.reason ?? d.failures ?? null,
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        code ? eq(payouts.paystackTransferCode, code) : eq(payouts.paystackReference, ref!),
+        sql`${payouts.status} in ('processing','requested')`,
+      ),
+    )
+    .returning();
+
+  if (!updated) return; // already handled
+
+  // Refund the held amount back to the creator's available balance
+  await db
+    .update(walletBalances)
+    .set({
+      availableKobo: sql`${walletBalances.availableKobo} + ${updated.amountKobo}`,
+      updatedAt: new Date(),
+    })
+    .where(eq(walletBalances.creatorUserId, updated.creatorUserId));
 }
