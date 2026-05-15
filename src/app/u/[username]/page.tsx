@@ -1,12 +1,14 @@
 import { notFound } from "next/navigation";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import { Heart } from "lucide-react";
 import { db } from "@/server/db";
 import { users } from "@/server/db/schema/users";
 import { creatorProfiles } from "@/server/db/schema/creators";
 import { tips } from "@/server/db/schema/tips";
+import { membershipTiers } from "@/server/db/schema/memberships";
 import { CreatorTipWidget } from "@/components/creator/CreatorTipWidget";
+import { MembershipTiersSection } from "@/components/creator/MembershipTiersSection";
 import { Nav } from "@/components/landing/Nav";
 import { cn, formatNaira } from "@/lib/utils";
 
@@ -167,6 +169,12 @@ export default async function CreatorPage({ params }: PageProps) {
                 </p>
               )}
 
+              {/* Memberships (active tiers only) */}
+              <CreatorMemberships
+                creatorUserId={user.id}
+                displayName={profile.displayName}
+              />
+
               {/* Supporters wall */}
               <SupportersWall
                 creatorUserId={user.id}
@@ -206,6 +214,28 @@ export default async function CreatorPage({ params }: PageProps) {
         </footer>
       </main>
     </>
+  );
+}
+
+async function CreatorMemberships({
+  creatorUserId,
+  displayName,
+}: {
+  creatorUserId: string;
+  displayName: string;
+}) {
+  const tiers = await db.query.membershipTiers.findMany({
+    where: and(
+      eq(membershipTiers.creatorUserId, creatorUserId),
+      eq(membershipTiers.isActive, true),
+    ),
+    orderBy: asc(membershipTiers.priceKobo),
+  });
+
+  if (tiers.length === 0) return null;
+
+  return (
+    <MembershipTiersSection tiers={tiers} creatorDisplayName={displayName} />
   );
 }
 
