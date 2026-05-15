@@ -8,8 +8,10 @@ import {
   Sparkles,
   Banknote,
   Settings,
+  ShieldCheck,
 } from "lucide-react";
 import { KunuCupGlyph } from "@/components/landing/KunuCupGlyph";
+import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -22,6 +24,9 @@ const LINKS = [
 
 export function DashboardNav() {
   const pathname = usePathname();
+  const { data: amIAdmin } = trpc.auth.amIAdmin.useQuery(undefined, {
+    staleTime: 60_000,
+  });
 
   return (
     <header className="sticky top-0 z-40 border-b border-kunu-ink/8 bg-kunu-cream/85 backdrop-blur">
@@ -61,6 +66,21 @@ export function DashboardNav() {
               </Link>
             );
           })}
+
+          {amIAdmin && (
+            <Link
+              href="/admin"
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+                pathname.startsWith("/admin")
+                  ? "bg-kunu-terracotta text-kunu-cream"
+                  : "border border-kunu-terracotta/40 text-kunu-terracotta hover:bg-kunu-terracotta/10",
+              )}
+            >
+              <ShieldCheck className="h-4 w-4" />
+              <span className="hidden sm:inline">Admin</span>
+            </Link>
+          )}
         </nav>
       </div>
     </header>

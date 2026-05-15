@@ -207,12 +207,6 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      <p className="mt-10 text-center text-xs text-kunu-clay">
-        Set PAYSTACK_SECRET_KEY in Vercel env vars to enable real tips, then
-        register the webhook URL{" "}
-        <span className="font-mono">/api/paystack/webhook</span> in the Paystack
-        dashboard.
-      </p>
     </main>
   );
 }

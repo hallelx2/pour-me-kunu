@@ -8,6 +8,7 @@ import {
   USERNAME_MIN,
   USERNAME_MAX,
 } from "@/lib/reserved-usernames";
+import { isAdmin } from "@/lib/admin";
 
 const usernameInputSchema = z.object({
   username: z
@@ -20,6 +21,10 @@ const usernameInputSchema = z.object({
 export const authRouter = router({
   me: protectedProcedure.query(async ({ ctx }) => {
     return ctx.session.user;
+  }),
+
+  amIAdmin: protectedProcedure.query(({ ctx }) => {
+    return isAdmin(ctx.session.user.email);
   }),
 
   checkUsername: publicProcedure
