@@ -145,6 +145,7 @@ export default async function CreatorOpenGraphImage({ params }: Props) {
           </div>
           <div
             style={{
+              display: "flex",
               fontSize: 88,
               fontWeight: 700,
               lineHeight: 1.02,
@@ -153,7 +154,7 @@ export default async function CreatorOpenGraphImage({ params }: Props) {
               maxWidth: 1000,
             }}
           >
-            Buy {firstName} a {profile.kunuLabel} {profile.kunuEmoji}
+            {`Buy ${firstName} a ${profile.kunuLabel} ${profile.kunuEmoji}`}
           </div>
           {profile.tagline ? (
             <div

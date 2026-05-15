@@ -1,13 +1,20 @@
 import Link from "next/link";
 import { and, eq, sql } from "drizzle-orm";
-import { ArrowLeft, Check, X } from "lucide-react";
+import { ArrowLeft, Check, X, Loader2 } from "lucide-react";
 import { db } from "@/server/db";
 import { tips } from "@/server/db/schema/tips";
 import { walletBalances, creatorProfiles } from "@/server/db/schema/creators";
 import { users } from "@/server/db/schema/users";
+import {
+  membershipTiers,
+  subscriptions,
+  subscriptionCharges,
+} from "@/server/db/schema/memberships";
 import { verifyTransaction } from "@/server/paystack/client";
 import { KunuCupGlyph } from "@/components/landing/KunuCupGlyph";
 import { formatNaira } from "@/lib/utils";
+
+const PLATFORM_FEE_RATE = 0.05;
 
 interface PageProps {
   searchParams: Promise<{
@@ -27,15 +34,157 @@ export default async function CheckoutCallbackPage({ searchParams }: PageProps) 
     return <ErrorState reason="No payment reference in the URL." />;
   }
 
+  /* ────────────────────────────────────────────────────────────────────
+   * 1. One-off tip path — find by reference in tips
+   * ──────────────────────────────────────────────────────────────────── */
   const tip = await db.query.tips.findFirst({
     where: eq(tips.paystackReference, reference),
   });
 
-  if (!tip) {
-    return <ErrorState reason="We couldn't find that payment." />;
+  if (tip) {
+    return await handleTipFinalize(tip, reference);
   }
 
-  // Race-safe: if the webhook already marked this paid, skip the verify call
+  /* ────────────────────────────────────────────────────────────────────
+   * 2. Subscription path — already processed by webhook? Charge row exists.
+   * ──────────────────────────────────────────────────────────────────── */
+  const subCharge = await db.query.subscriptionCharges.findFirst({
+    where: eq(subscriptionCharges.paystackReference, reference),
+  });
+
+  if (subCharge) {
+    const sub = await db.query.subscriptions.findFirst({
+      where: eq(subscriptions.id, subCharge.subscriptionId),
+    });
+    const tier = sub
+      ? await db.query.membershipTiers.findFirst({
+          where: eq(membershipTiers.id, sub.tierId),
+        })
+      : null;
+    if (sub && tier) {
+      return await SubscriptionSuccess({
+        creatorUserId: sub.creatorUserId,
+        amountKobo: subCharge.amountKobo,
+        tierName: tier.name,
+        interval: tier.interval,
+        reference,
+      });
+    }
+  }
+
+  /* ────────────────────────────────────────────────────────────────────
+   * 3. Neither found locally — verify with Paystack to figure out what it is
+   * ──────────────────────────────────────────────────────────────────── */
+  let verifyData;
+  try {
+    verifyData = await verifyTransaction(reference);
+  } catch (err) {
+    return (
+      <ErrorState
+        reason={
+          err instanceof Error
+            ? `Couldn't verify with Paystack: ${err.message}`
+            : "Couldn't verify with Paystack."
+        }
+      />
+    );
+  }
+
+  if (verifyData.status !== "success") {
+    return <ErrorState reason="Paystack reported the payment didn't go through." />;
+  }
+
+  // It's a subscription charge that we haven't recorded yet — finalize now.
+  // We persist the charge so the webhook (whenever it arrives) is a no-op.
+  if (verifyData.plan?.plan_code) {
+    const tier = await db.query.membershipTiers.findFirst({
+      where: eq(membershipTiers.paystackPlanCode, verifyData.plan.plan_code),
+    });
+    if (!tier) {
+      return (
+        <ErrorState reason="We received the payment but can't find a matching tier." />
+      );
+    }
+    const supporterEmail = verifyData.customer.email.toLowerCase();
+    const sub = await db.query.subscriptions.findFirst({
+      where: and(
+        eq(subscriptions.tierId, tier.id),
+        eq(subscriptions.supporterEmail, supporterEmail),
+      ),
+    });
+    if (!sub) {
+      return (
+        <ErrorState reason="We received the payment but can't find your pending subscription." />
+      );
+    }
+
+    const amountKobo = verifyData.amount;
+    const feeKobo = Math.floor(amountKobo * PLATFORM_FEE_RATE);
+    const netKobo = amountKobo - feeKobo;
+    const paidAt = verifyData.paid_at
+      ? new Date(verifyData.paid_at)
+      : new Date();
+
+    // Insert charge — idempotent on the unique reference constraint
+    const inserted = await db
+      .insert(subscriptionCharges)
+      .values({
+        subscriptionId: sub.id,
+        amountKobo,
+        paystackReference: reference,
+        paidAt,
+      })
+      .onConflictDoNothing({ target: subscriptionCharges.paystackReference })
+      .returning();
+
+    // Only bump wallet on actual insert (idempotent vs webhook)
+    if (inserted.length > 0) {
+      await db
+        .insert(walletBalances)
+        .values({
+          creatorUserId: sub.creatorUserId,
+          availableKobo: netKobo,
+          lifetimeKobo: amountKobo,
+        })
+        .onConflictDoUpdate({
+          target: walletBalances.creatorUserId,
+          set: {
+            availableKobo: sql`${walletBalances.availableKobo} + ${netKobo}`,
+            lifetimeKobo: sql`${walletBalances.lifetimeKobo} + ${amountKobo}`,
+            updatedAt: new Date(),
+          },
+        });
+    }
+
+    return await SubscriptionSuccess({
+      creatorUserId: sub.creatorUserId,
+      amountKobo,
+      tierName: tier.name,
+      interval: tier.interval,
+      reference,
+    });
+  }
+
+  // One-off tip but the local row is missing? Unusual — probably a stale
+  // browser tab from a deleted reference. Generic success.
+  return <ErrorState reason="We received the payment but couldn't match it to a local record. If money was deducted, support will refund it within a few business days." />;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Tip finalize (existing flow, factored out so the entry function is clean)
+ * ──────────────────────────────────────────────────────────────────────── */
+
+interface TipRow {
+  id: string;
+  status: string;
+  creatorUserId: string;
+  kunuCount: number;
+  amountKobo: number;
+  netKobo: number;
+  message: string | null;
+}
+
+async function handleTipFinalize(tip: TipRow, reference: string) {
   let resolved = tip;
 
   if (tip.status === "pending") {
@@ -55,7 +204,6 @@ export default async function CheckoutCallbackPage({ searchParams }: PageProps) 
     }
 
     if (verifyData.status !== "success") {
-      // Best effort — mark failed if still pending
       await db
         .update(tips)
         .set({ status: "failed", updatedAt: new Date() })
@@ -65,14 +213,11 @@ export default async function CheckoutCallbackPage({ searchParams }: PageProps) 
       );
     }
 
-    // Compare-and-set: only one of {callback, webhook} wins the "paid" flip
     const [updated] = await db
       .update(tips)
       .set({
         status: "paid",
-        paidAt: verifyData.paid_at
-          ? new Date(verifyData.paid_at)
-          : new Date(),
+        paidAt: verifyData.paid_at ? new Date(verifyData.paid_at) : new Date(),
         paystackChannel: verifyData.channel,
         updatedAt: new Date(),
       })
@@ -81,7 +226,6 @@ export default async function CheckoutCallbackPage({ searchParams }: PageProps) 
 
     if (updated) {
       resolved = updated;
-      // Bump the creator's wallet — insert-or-update
       await db
         .insert(walletBalances)
         .values({
@@ -100,7 +244,6 @@ export default async function CheckoutCallbackPage({ searchParams }: PageProps) 
     }
   }
 
-  // Look up creator info for the thank-you copy
   const creator = await db.query.users.findFirst({
     where: eq(users.id, resolved.creatorUserId),
     columns: { username: true, name: true },
@@ -113,6 +256,93 @@ export default async function CheckoutCallbackPage({ searchParams }: PageProps) 
   const displayName = profile?.displayName ?? creator?.name ?? "the creator";
 
   return (
+    <SuccessShell
+      handle={handle}
+      displayNameFirst={displayName.split(" ")[0]}
+      headline={`You just made ${displayName.split(" ")[0]}'s day.`}
+      subline={
+        <>
+          {resolved.kunuCount} kunu{resolved.kunuCount > 1 ? "s" : ""} ·{" "}
+          <span className="font-display font-semibold text-kunu-terracotta">
+            {formatNaira(resolved.amountKobo)}
+          </span>{" "}
+          delivered. {displayName} will be notified.
+        </>
+      }
+      message={resolved.message}
+      reference={reference}
+    />
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Subscription success (server component — fetches creator info for the copy)
+ * ──────────────────────────────────────────────────────────────────────── */
+
+async function SubscriptionSuccess({
+  creatorUserId,
+  amountKobo,
+  tierName,
+  interval,
+  reference,
+}: {
+  creatorUserId: string;
+  amountKobo: number;
+  tierName: string;
+  interval: "monthly" | "annually";
+  reference: string;
+}) {
+  const creator = await db.query.users.findFirst({
+    where: eq(users.id, creatorUserId),
+    columns: { username: true, name: true },
+  });
+  const profile = await db.query.creatorProfiles.findFirst({
+    where: eq(creatorProfiles.userId, creatorUserId),
+  });
+  const handle = creator?.username ?? "creator";
+  const displayName = profile?.displayName ?? creator?.name ?? "the creator";
+
+  return (
+    <SuccessShell
+      handle={handle}
+      displayNameFirst={displayName.split(" ")[0]}
+      headline={`You're in. Thanks for supporting ${displayName.split(" ")[0]}.`}
+      subline={
+        <>
+          {tierName} ·{" "}
+          <span className="font-display font-semibold text-kunu-terracotta">
+            {formatNaira(amountKobo)}
+          </span>{" "}
+          {interval === "annually" ? "/ year" : "/ month"} — recurring until you
+          cancel.
+        </>
+      }
+      message={null}
+      reference={reference}
+    />
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Shared UI
+ * ──────────────────────────────────────────────────────────────────────── */
+
+function SuccessShell({
+  handle,
+  displayNameFirst,
+  headline,
+  subline,
+  message,
+  reference,
+}: {
+  handle: string;
+  displayNameFirst: string;
+  headline: string;
+  subline: React.ReactNode;
+  message: string | null;
+  reference: string;
+}) {
+  return (
     <main className="relative isolate min-h-screen overflow-hidden">
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute -right-32 -top-32 h-[36rem] w-[36rem] rounded-full bg-gradient-to-br from-kunu-ochre/40 via-kunu-terracotta/30 to-transparent blur-3xl" />
@@ -123,29 +353,29 @@ export default async function CheckoutCallbackPage({ searchParams }: PageProps) 
 
       <div className="mx-auto max-w-xl px-6 py-20 text-center sm:px-8">
         <div className="inline-flex">
-          <KunuCupGlyph size={80} fillLevel={0.85} withStraw withSparkles animate={false} />
+          <KunuCupGlyph
+            size={80}
+            fillLevel={0.85}
+            withStraw
+            withSparkles
+            animate={false}
+          />
         </div>
         <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-kunu-green/15 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider text-kunu-green">
           <Check className="h-3.5 w-3.5" strokeWidth={3} />
           Kunu delivered
         </div>
         <h1 className="mt-4 font-display text-4xl font-semibold leading-tight tracking-tight text-kunu-ink sm:text-5xl">
-          You just made {displayName.split(" ")[0]}'s day.
+          {headline}
         </h1>
-        <p className="mt-3 text-base text-kunu-ink-soft">
-          {resolved.kunuCount} kunu{resolved.kunuCount > 1 ? "s" : ""} ·{" "}
-          <span className="font-display font-semibold text-kunu-terracotta">
-            {formatNaira(resolved.amountKobo)}
-          </span>{" "}
-          delivered. {displayName} will be notified.
-        </p>
+        <p className="mt-3 text-base text-kunu-ink-soft">{subline}</p>
 
-        {resolved.message && (
+        {message && (
           <div className="mx-auto mt-6 max-w-md rounded-2xl border-2 border-kunu-ink/10 bg-kunu-cream-deep/40 p-4 text-left text-sm text-kunu-ink-soft">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-kunu-clay">
               Your message
             </p>
-            <p className="mt-1.5">{resolved.message}</p>
+            <p className="mt-1.5">{message}</p>
           </div>
         )}
 
