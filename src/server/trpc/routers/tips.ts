@@ -9,6 +9,7 @@ import {
   generatePaystackReference,
   initializeTransaction,
 } from "@/server/paystack/client";
+import { enforceRateLimit } from "@/server/rate-limit";
 
 const PLATFORM_FEE_RATE = 0.05; // 5%
 
@@ -36,6 +37,8 @@ export const tipsRouter = router({
   initiate: publicProcedure
     .input(initiateInput)
     .mutation(async ({ ctx, input }) => {
+      enforceRateLimit(ctx.req, "tips.initiate");
+
       const creator = await ctx.db.query.users.findFirst({
         where: eq(sql`lower(${users.username})`, input.username),
         columns: { id: true, username: true },

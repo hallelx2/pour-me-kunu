@@ -14,6 +14,7 @@ import {
   generatePaystackReference,
   initializeTransaction,
 } from "@/server/paystack/client";
+import { enforceRateLimit } from "@/server/rate-limit";
 
 const tierInput = z.object({
   name: z.string().trim().min(1).max(60),
@@ -187,6 +188,8 @@ export const membershipsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      enforceRateLimit(ctx.req, "memberships.subscribe");
+
       const tier = await ctx.db.query.membershipTiers.findFirst({
         where: eq(membershipTiers.id, input.tierId),
       });

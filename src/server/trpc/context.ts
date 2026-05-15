@@ -6,6 +6,7 @@ export async function createContext({ req }: { req: Request }) {
   return {
     db,
     session,
+    req,
   };
 }
 
