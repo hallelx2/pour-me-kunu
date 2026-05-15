@@ -9,7 +9,7 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 interface Props {
-  params: { username: string };
+  params: Promise<{ username: string }>;
 }
 
 const ACCENT_BG: Record<string, { from: string; to: string; chip: string }> = {
@@ -20,7 +20,8 @@ const ACCENT_BG: Record<string, { from: string; to: string; chip: string }> = {
 };
 
 export default async function CreatorOpenGraphImage({ params }: Props) {
-  const usernameRaw = params.username.toLowerCase();
+  const { username } = await params;
+  const usernameRaw = username.toLowerCase();
 
   // Fetch creator data — same shape as the page itself
   const user = await db.query.users.findFirst({
