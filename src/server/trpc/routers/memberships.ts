@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure, protectedProcedure } from "../init";
 import { users } from "@/server/db/schema/users";
@@ -213,7 +213,9 @@ export const membershipsRouter = router({
           supporterUserId,
           supporterEmail,
           tierId: tier.id,
-          status: "non-renewing", // placeholder — webhook flips to 'active' on subscription.create
+          // status defaults to 'active' but paystackSubscriptionCode stays
+          // null until subscription.create fires. Queries gate on the code
+          // being present, so this row is effectively pending until then.
         })
         .returning();
 
@@ -272,6 +274,7 @@ export const membershipsRouter = router({
       .where(
         and(
           eq(subscriptions.supporterUserId, ctx.user.id),
+          isNotNull(subscriptions.paystackSubscriptionCode),
           inArray(subscriptions.status, ["active", "non-renewing", "attention"]),
         ),
       )
@@ -315,8 +318,8 @@ export const membershipsRouter = router({
   summaryForMe: protectedProcedure.query(async ({ ctx }) => {
     const [row] = await ctx.db
       .select({
-        activeSubscribers: sql<number>`count(*) filter (where ${subscriptions.status} = 'active')`.mapWith(Number),
-        totalSubscribers: sql<number>`count(distinct ${subscriptions.supporterEmail})`.mapWith(Number),
+        activeSubscribers: sql<number>`count(*) filter (where ${subscriptions.status} = 'active' and ${subscriptions.paystackSubscriptionCode} is not null)`.mapWith(Number),
+        totalSubscribers: sql<number>`count(distinct ${subscriptions.supporterEmail}) filter (where ${subscriptions.paystackSubscriptionCode} is not null)`.mapWith(Number),
       })
       .from(subscriptions)
       .where(eq(subscriptions.creatorUserId, ctx.user.id));
