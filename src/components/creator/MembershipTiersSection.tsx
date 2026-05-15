@@ -80,22 +80,26 @@ function TierCard({
       whileHover={{ y: -2 }}
       className="flex h-full flex-col rounded-3xl border-2 border-kunu-ink/8 bg-kunu-cream p-6 transition-shadow hover:shadow-[0_20px_50px_-30px_rgba(31,22,17,0.3)]"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="font-display text-lg font-semibold text-kunu-ink">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="font-display text-lg font-semibold leading-tight text-kunu-ink">
             {tier.name}
           </div>
-          {tier.description && (
-            <p className="mt-1 text-sm text-kunu-ink-soft">{tier.description}</p>
-          )}
         </div>
-        <div className="text-right">
-          <div className="font-display text-2xl font-semibold text-kunu-terracotta">
+        <div className="shrink-0 text-right">
+          <div className="font-display text-xl font-semibold leading-none text-kunu-terracotta whitespace-nowrap">
             {formatNaira(tier.priceKobo)}
           </div>
-          <div className="text-xs text-kunu-clay">/{tier.interval}</div>
+          <div className="mt-0.5 text-[10px] text-kunu-clay">
+            /{tier.interval}
+          </div>
         </div>
       </div>
+      {tier.description && (
+        <p className="mt-2 text-sm text-kunu-ink-soft text-pretty">
+          {tier.description}
+        </p>
+      )}
 
       {tier.perks && tier.perks.length > 0 && (
         <ul className="mt-4 flex-1 space-y-1.5 text-sm text-kunu-ink-soft">

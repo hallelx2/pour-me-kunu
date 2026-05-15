@@ -148,22 +148,26 @@ function TierCard({
           : "border-kunu-ink/8 bg-kunu-cream-deep/30 opacity-70",
       )}
     >
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="font-display text-xl font-semibold text-kunu-ink">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="font-display text-xl font-semibold leading-tight text-kunu-ink">
             {tier.name}
           </div>
-          {tier.description && (
-            <p className="mt-1 text-sm text-kunu-ink-soft">{tier.description}</p>
-          )}
         </div>
-        <div className="text-right">
-          <div className="font-display text-2xl font-semibold text-kunu-terracotta">
+        <div className="shrink-0 text-right">
+          <div className="font-display text-xl font-semibold leading-none text-kunu-terracotta whitespace-nowrap">
             {formatNaira(tier.priceKobo)}
           </div>
-          <div className="text-xs text-kunu-clay">/{tier.interval}</div>
+          <div className="mt-0.5 text-[10px] text-kunu-clay">
+            /{tier.interval}
+          </div>
         </div>
       </div>
+      {tier.description && (
+        <p className="mt-2 text-sm text-kunu-ink-soft text-pretty">
+          {tier.description}
+        </p>
+      )}
 
       {tier.perks && tier.perks.length > 0 && (
         <ul className="mt-4 space-y-1.5 text-sm text-kunu-ink-soft">
